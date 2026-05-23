@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/rbac";
 import { canAccessAdmin, canApproveDept } from "@/lib/rbac";
+import type { Prisma } from "@prisma/client";
 import { DoorOpen, ClipboardCheck, Clock, CheckCircle } from "lucide-react";
 
 export default async function DashboardPage() {
@@ -16,12 +17,12 @@ export default async function DashboardPage() {
 
   const role = session.role as string;
 
-  const buildPendingWhere = () => {
+  const buildPendingWhere = (): Prisma.ReservationWhereInput | null => {
     if (role === "DEPT_HEAD") {
-      return { status: "PENDING_DEPT" };
+      return { status: "PENDING_DEPT" as const };
     }
     if (role === "MAGS_OFFICER") {
-      return { status: "PENDING_MAGS" };
+      return { status: "PENDING_MAGS" as const };
     }
     if (role === "ADMIN") {
       return { status: { in: ["PENDING_DEPT", "PENDING_MAGS"] } };
