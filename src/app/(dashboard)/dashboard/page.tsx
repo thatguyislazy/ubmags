@@ -9,7 +9,6 @@ import { formatDateTime } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/rbac";
 import { canAccessAdmin, canApproveDept } from "@/lib/rbac";
 import { ReservationStatus } from "@prisma/client";
-import type { Prisma } from "@prisma/client";
 import { DoorOpen, ClipboardCheck, Clock, CheckCircle } from "lucide-react";
 
 export default async function DashboardPage() {
@@ -18,7 +17,7 @@ export default async function DashboardPage() {
 
   const role = session.role as string;
 
-  const buildPendingWhere = (): Prisma.ReservationWhereInput | null => {
+  const buildPendingWhere = () => {
     if (role === "DEPT_HEAD") {
       return { status: ReservationStatus.PENDING_DEPT };
     }
@@ -35,7 +34,7 @@ export default async function DashboardPage() {
     return null;
   };
 
-  const buildReservationsWhere = (): Prisma.ReservationWhereInput => {
+  const buildReservationsWhere = () => {
     if (role === "STUDENT" || role === "FACULTY") {
       return { userId: session.id };
     }
@@ -57,8 +56,9 @@ export default async function DashboardPage() {
       take: 3,
     }),
     prisma.notification.count({ where: { userId: session.id, read: false } }),
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     pendingWhere
-      ? prisma.reservation.count({ where: pendingWhere })
+      ? prisma.reservation.count({ where: pendingWhere as any })
       : Promise.resolve(0),
   ]);
 
