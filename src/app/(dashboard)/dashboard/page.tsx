@@ -8,6 +8,7 @@ import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/rbac";
 import { canAccessAdmin, canApproveDept } from "@/lib/rbac";
+import { ReservationStatus } from "@prisma/client";
 import type { Prisma } from "@prisma/client";
 import { DoorOpen, ClipboardCheck, Clock, CheckCircle } from "lucide-react";
 
@@ -19,18 +20,22 @@ export default async function DashboardPage() {
 
   const buildPendingWhere = (): Prisma.ReservationWhereInput | null => {
     if (role === "DEPT_HEAD") {
-      return { status: "PENDING_DEPT" as const };
+      return { status: ReservationStatus.PENDING_DEPT };
     }
     if (role === "MAGS_OFFICER") {
-      return { status: "PENDING_MAGS" as const };
+      return { status: ReservationStatus.PENDING_MAGS };
     }
     if (role === "ADMIN") {
-      return { status: { in: ["PENDING_DEPT", "PENDING_MAGS"] } };
+      return {
+        status: {
+          in: [ReservationStatus.PENDING_DEPT, ReservationStatus.PENDING_MAGS],
+        },
+      };
     }
     return null;
   };
 
-  const buildReservationsWhere = () => {
+  const buildReservationsWhere = (): Prisma.ReservationWhereInput => {
     if (role === "STUDENT" || role === "FACULTY") {
       return { userId: session.id };
     }
@@ -80,7 +85,7 @@ export default async function DashboardPage() {
     {
       label: "Approved",
       value: await prisma.reservation.count({
-        where: { userId: session.id, status: "APPROVED" },
+        where: { userId: session.id, status: ReservationStatus.APPROVED },
       }),
       icon: CheckCircle,
       href: "/reservations?status=APPROVED",
