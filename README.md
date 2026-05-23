@@ -1,36 +1,79 @@
-This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
+# MAGS Resource Management System - UBLC
 
-## Getting Started
+Paperless reservation and approval platform for rooms, venues, equipment, manpower, and gate passes.
 
-First, run the development server:
+**Database: SQLite** — no MySQL, PostgreSQL, or Docker required. Your client runs `npm install`, `npm run setup`, and `npm run dev`.
+
+## Student / client quick start
 
 ```bash
+cd burms
+npm install
+npm run setup
 npm run dev
-# or
-yarn dev
-# or
-pnpm dev
-# or
-bun dev
 ```
 
-Open [http://localhost:3000](http://localhost:3000) with your browser to see the result.
+Open [http://localhost:3000](http://localhost:3000)
 
-You can start editing the page by modifying `app/page.tsx`. The page auto-updates as you edit the file.
+| Email | Password | Role |
+|-------|----------|------|
+| student@ub.edu.ph | Student@123 | Student |
+| faculty@ub.edu.ph | Faculty@123 | Faculty |
+| depthead@ub.edu.ph | Dept@123 | Department Head |
+| mags@ub.edu.ph | Mags@123 | MAGS Officer |
+| admin@ub.edu.ph | Admin@123 | Admin |
 
-This project uses [`next/font`](https://nextjs.org/docs/app/building-your-application/optimizing/fonts) to automatically optimize and load [Geist](https://vercel.com/font), a new font family for Vercel.
+## Module documentation (for review)
 
-## Learn More
+Full guides for each part of the system:
 
-To learn more about Next.js, take a look at the following resources:
+| # | Module | Document |
+|---|--------|----------|
+| — | Overview & setup | [docs/00-getting-started.md](docs/00-getting-started.md) |
+| 1 | Authentication | [docs/01-authentication.md](docs/01-authentication.md) |
+| 2 | Dashboard | [docs/02-dashboard.md](docs/02-dashboard.md) |
+| 3 | Venue reservations (F-MAGS LC-10) | [docs/03-venue-reservations.md](docs/03-venue-reservations.md) |
+| 4 | Gate passes (F-MAGS LC-06) | [docs/04-gate-passes.md](docs/04-gate-passes.md) |
+| 5 | Calendar & scheduling | [docs/05-calendar-scheduling.md](docs/05-calendar-scheduling.md) |
+| 6 | Notifications | [docs/06-notifications.md](docs/06-notifications.md) |
+| 7 | Equipment inventory | [docs/07-equipment.md](docs/07-equipment.md) |
+| 8 | Administration | [docs/08-administration.md](docs/08-administration.md) |
+| 9 | Reports & analytics | [docs/09-reports-analytics.md](docs/09-reports-analytics.md) |
+| 10 | Approval workflow | [docs/10-approval-workflow.md](docs/10-approval-workflow.md) |
 
-- [Next.js Documentation](https://nextjs.org/docs) - learn about Next.js features and API.
-- [Learn Next.js](https://nextjs.org/learn) - an interactive Next.js tutorial.
+Start here: **[docs/README.md](docs/README.md)**
 
-You can check out [the Next.js GitHub repository](https://github.com/vercel/next.js) - your feedback and contributions are welcome!
+## Tech stack
 
-## Deploy on Vercel
+| Layer | Technology |
+|-------|------------|
+| Frontend | Next.js 16, React 19, Tailwind CSS 4 |
+| Backend | Next.js API Routes, JWT (`jose`) |
+| Database | **SQLite** + Prisma ORM (`prisma/burms.db`) |
+| Calendar | FullCalendar |
+| Documents | jsPDF, QR codes |
 
-The easiest way to deploy your Next.js app is to use the [Vercel Platform](https://vercel.com/new?utm_medium=default-template&filter=next.js&utm_source=create-next-app&utm_campaign=create-next-app-readme) from the creators of Next.js.
+## Scripts
 
-Check out our [Next.js deployment documentation](https://nextjs.org/docs/app/building-your-application/deploying) for more details.
+| Command | Description |
+|---------|-------------|
+| `npm run setup` | Create SQLite DB + seed demo data (first run) |
+| `npm run dev` | Development server |
+| `npm run build` | Production build |
+| `npm run start` | Run production server |
+| `npm run db:studio` | Browse database (Prisma Studio) |
+
+## Sending to a client
+
+1. Zip the `burms` folder (include `prisma/burms.db` if already seeded).
+2. Client runs the three commands above.
+3. Point them to `docs/` for module-by-module review.
+
+## Data location
+
+- Database file: `prisma/burms.db`
+- To reset: delete `prisma/burms.db` and run `npm run setup` again.
+
+## License
+
+Proprietary — University of Batangas / MAGS Office.
