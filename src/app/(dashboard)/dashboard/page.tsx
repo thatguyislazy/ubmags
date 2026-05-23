@@ -7,34 +7,31 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/lib/utils";
 import { ROLE_LABELS } from "@/lib/rbac";
-import { canAccessAdmin, canApproveDept, canApproveMags } from "@/lib/rbac";
+import { canAccessAdmin, canApproveDept } from "@/lib/rbac";
 import { DoorOpen, ClipboardCheck, Clock, CheckCircle } from "lucide-react";
 
 export default async function DashboardPage() {
   const session = await getSession();
   if (!session) return null;
 
-  // Build pending count where clause — no departmentId filter for DEPT_HEAD
+  const role = session.role as string;
+
   const buildPendingWhere = () => {
-    if (session.role === "DEPT_HEAD") {
+    if (role === "DEPT_HEAD") {
       return { status: "PENDING_DEPT" };
     }
-    if (canApproveMags(session.role)) {
+    if (role === "MAGS_OFFICER") {
       return { status: "PENDING_MAGS" };
     }
-    if (session.role === "ADMIN") {
+    if (role === "ADMIN") {
       return { status: { in: ["PENDING_DEPT", "PENDING_MAGS"] } };
     }
     return null;
   };
 
-  // Build reservations where clause for recent reservations list
   const buildReservationsWhere = () => {
-    if (session.role === "STUDENT" || session.role === "FACULTY") {
+    if (role === "STUDENT" || role === "FACULTY") {
       return { userId: session.id };
-    }
-    if (session.role === "DEPT_HEAD") {
-      return {}; // sees all departments
     }
     return {};
   };
