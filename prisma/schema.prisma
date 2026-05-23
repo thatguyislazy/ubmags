@@ -3,8 +3,9 @@ generator client {
 }
 
 datasource db {
-  provider = "sqlite"
-  url      = env("DATABASE_URL")
+  provider  = "postgresql"
+  url       = env("DATABASE_URL")
+  directUrl = env("DIRECT_URL")
 }
 
 enum UserRole {
@@ -22,16 +23,16 @@ enum ResourceCategory {
   SERVICE
 }
 
-//status
 enum ReservationStatus {
   DRAFT
-  PENDING_DEPT       // Student submitted, waiting for Faculty/Dept Head
-  SEMI_APPROVED      // Faculty approved, waiting for MAGS <- ALISIN ANG COMMENT MARKER
-  PENDING_MAGS       // Optional: pwedeng alisin kung SEMI_APPROVED na ang gamit
-  APPROVED           // MAGS approved
-  DECLINED           // Declined by Faculty OR MAGS
-  CANCELLED          // Cancelled by Student
+  PENDING_DEPT
+  SEMI_APPROVED
+  PENDING_MAGS
+  APPROVED
+  DECLINED
+  CANCELLED
   COMPLETED
+  REJECTED
 }
 
 enum ApprovalLevel {
@@ -101,12 +102,12 @@ model User {
   createdAt      DateTime  @default(now())
   updatedAt      DateTime  @updatedAt
 
-  department     Department?      @relation(fields: [departmentId], references: [id])
-  reservations   Reservation[]    @relation("RequestorReservations")
-  gatePasses     GatePass[]
-  notifications  Notification[]
-  auditLogs      AuditLog[]
-  assignedApprovals ApprovalLog[] @relation("ApproverLogs")
+  department        Department?      @relation(fields: [departmentId], references: [id])
+  reservations      Reservation[]    @relation("RequestorReservations")
+  gatePasses        GatePass[]
+  notifications     Notification[]
+  auditLogs         AuditLog[]
+  assignedApprovals ApprovalLog[]    @relation("ApproverLogs")
   savedEquipment    SavedEquipment[]
 
   @@index([departmentId])
@@ -114,56 +115,56 @@ model User {
 }
 
 model Resource {
-  id               String           @id @default(cuid())
-  name             String
-  slug             String           @unique
-  category         ResourceCategory
-  description      String?
-  capacity         Int?
-  building         String?
-  requiresSpecify  Boolean          @default(false)
-  quantity         Int              @default(0)      // Add this line
-  availableQuantity Int             @default(0)      // Add this line
-  isActive         Boolean          @default(true)
-  sortOrder        Int              @default(0)
-  createdAt        DateTime         @default(now())
-  updatedAt        DateTime         @updatedAt
+  id                String           @id @default(cuid())
+  name              String
+  slug              String           @unique
+  category          ResourceCategory
+  description       String?
+  capacity          Int?
+  building          String?
+  requiresSpecify   Boolean          @default(false)
+  quantity          Int              @default(0)
+  availableQuantity Int              @default(0)
+  isActive          Boolean          @default(true)
+  sortOrder         Int              @default(0)
+  createdAt         DateTime         @default(now())
+  updatedAt         DateTime         @updatedAt
 
-  reservationVenues     ReservationVenue[]
-  reservationEquipment  ReservationEquipment[]
-  reservationServices   ReservationService[]
-  gatePassEquipment     GatePassEquipment[]
-  transferItems         TransferItem[]
+  reservationVenues    ReservationVenue[]
+  reservationEquipment ReservationEquipment[]
+  reservationServices  ReservationService[]
+  gatePassEquipment    GatePassEquipment[]
+  transferItems        TransferItem[]
 }
 
 model Reservation {
-  id                  String            @id @default(cuid())
-  requestNumber       String            @unique
-  userId              String
-  departmentId        String
-  campus              String
-  eventTitle          String
-  eventDescription    String?
-  startDateTime       DateTime
-  endDateTime         DateTime
-  status              ReservationStatus @default(PENDING_DEPT)
-  filingDate          DateTime          @default(now())
-  itemsPersonnelNote  String?
-  customVenueSpecify  String?
-  conformeName        String?
-  conformeDate        DateTime?
-  conformeSigned      Boolean           @default(false)
-  rejectionReason     String?           // <-- ADD THIS LINE
-  createdAt           DateTime          @default(now())
-  updatedAt           DateTime          @updatedAt
+  id                 String            @id @default(cuid())
+  requestNumber      String            @unique
+  userId             String
+  departmentId       String
+  campus             String
+  eventTitle         String
+  eventDescription   String?
+  startDateTime      DateTime
+  endDateTime        DateTime
+  status             ReservationStatus @default(PENDING_DEPT)
+  filingDate         DateTime          @default(now())
+  itemsPersonnelNote String?
+  customVenueSpecify String?
+  conformeName       String?
+  conformeDate       DateTime?
+  conformeSigned     Boolean           @default(false)
+  rejectionReason    String?
+  createdAt          DateTime          @default(now())
+  updatedAt          DateTime          @updatedAt
 
-  user         User         @relation("RequestorReservations", fields: [userId], references: [id])
-  department   Department   @relation(fields: [departmentId], references: [id])
-  venues       ReservationVenue[]
-  equipment    ReservationEquipment[]
-  services     ReservationService[]
-  approvals    ApprovalLog[]
-  gatePasses   GatePass[]
+  user       User                   @relation("RequestorReservations", fields: [userId], references: [id])
+  department Department             @relation(fields: [departmentId], references: [id])
+  venues     ReservationVenue[]
+  equipment  ReservationEquipment[]
+  services   ReservationService[]
+  approvals  ApprovalLog[]
+  gatePasses GatePass[]
 
   @@index([userId])
   @@index([departmentId])
@@ -172,7 +173,7 @@ model Reservation {
 }
 
 model ReservationVenue {
-  id            String @id @default(cuid())
+  id            String  @id @default(cuid())
   reservationId String
   resourceId    String
   specifyText   String?
@@ -196,7 +197,7 @@ model ReservationEquipment {
 }
 
 model ReservationService {
-  id            String @id @default(cuid())
+  id            String  @id @default(cuid())
   reservationId String
   resourceId    String
   notes         String?
@@ -233,8 +234,8 @@ model GatePass {
   createdAt            DateTime       @default(now())
   updatedAt            DateTime       @updatedAt
 
-  user        User              @relation(fields: [userId], references: [id])
-  reservation Reservation?      @relation(fields: [reservationId], references: [id])
+  user        User                @relation(fields: [userId], references: [id])
+  reservation Reservation?        @relation(fields: [reservationId], references: [id])
   equipment   GatePassEquipment[]
   approvals   ApprovalLog[]
 
@@ -243,11 +244,11 @@ model GatePass {
 }
 
 model GatePassEquipment {
-  id         String @id @default(cuid())
+  id         String  @id @default(cuid())
   gatePassId String
   resourceId String?
   customName String?
-  quantity   Int    @default(1)
+  quantity   Int     @default(1)
 
   gatePass GatePass  @relation(fields: [gatePassId], references: [id], onDelete: Cascade)
   resource Resource? @relation(fields: [resourceId], references: [id])
@@ -263,12 +264,12 @@ model ApprovalLog {
   remarks       String?
   signatureName String?
   actedAt       DateTime?
+  reservationId String?
+  gatePassId    String?
 
   approver    User?        @relation("ApproverLogs", fields: [approverId], references: [id])
   reservation Reservation? @relation(fields: [reservationId], references: [id])
-  reservationId String?
   gatePass    GatePass?    @relation(fields: [gatePassId], references: [id])
-  gatePassId  String?
 
   @@index([entityType, entityId])
 }
