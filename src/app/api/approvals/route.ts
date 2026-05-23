@@ -14,15 +14,17 @@ export async function GET() {
   const session = await getSession();
   if (!session) return NextResponse.json({ error: "Unauthorized" }, { status: 401 });
 
+  const role = session.role as string;
+
   // 1 Dept Head sees ALL departments — no departmentId filter
   const buildWhere = () => {
-    if (session.role === "DEPT_HEAD") {
+    if (role === "DEPT_HEAD") {
       return { status: "PENDING_DEPT" };
     }
-    if (canApproveMags(session.role)) {
+    if (role === "MAGS_OFFICER") {
       return { status: "PENDING_MAGS" };
     }
-    if (session.role === "ADMIN") {
+    if (role === "ADMIN") {
       return { status: { in: ["PENDING_DEPT", "PENDING_MAGS"] } };
     }
     return { id: "none" }; // fallback — no results for unrecognized roles
