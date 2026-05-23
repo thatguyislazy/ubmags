@@ -13,6 +13,7 @@ type Props = {
   userId: string;
   sessionId: string;
   sessionRole: string;
+  hasEquipment?: boolean;
 };
 
 export function ReservationActions({
@@ -21,12 +22,15 @@ export function ReservationActions({
   userId,
   sessionId,
   sessionRole,
+  hasEquipment = false,
 }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const [remarks, setRemarks] = useState("");
   const [signatureName, setSignatureName] = useState("");
+  const [returnRemarks, setReturnRemarks] = useState("");
+  const [showReturnForm, setShowReturnForm] = useState(false);
 
   // Role checks
   const isFaculty = sessionRole === "FACULTY" || sessionRole === "DEPT_HEAD" || sessionRole === "STAFF";
@@ -40,18 +44,21 @@ export function ReservationActions({
   const showMagsDecline = isMags && status === "PENDING_MAGS";
   const showCancel = isOwner && ["PENDING_DEPT", "PENDING_MAGS"].includes(status);
 
-  const needsSignature = showSemiApprove || showFacultyDecline || showMagsApprove || showMagsDecline;
-  const hasActions = showSemiApprove || showFacultyDecline || showMagsApprove || showMagsDecline || showCancel;
+  // Mark as Completed — MAGS or Admin can mark APPROVED reservations as completed
+  const showMarkCompleted = isMags && status === "APPROVED";
 
-  // Debug logging
-  console.log("ReservationActions Debug:", {
-    sessionRole,
-    status,
-    isMags,
-    showMagsApprove,
-    showMagsDecline,
-    hasActions
-  });
+  // Equipment Return — MAGS or Admin can confirm equipment return
+  const showEquipmentReturn = isMags && status === "APPROVED" && hasEquipment;
+
+  const needsSignature = showSemiApprove || showFacultyDecline || showMagsApprove || showMagsDecline;
+  const hasActions =
+    showSemiApprove ||
+    showFacultyDecline ||
+    showMagsApprove ||
+    showMagsDecline ||
+    showCancel ||
+    showMarkCompleted ||
+    showEquipmentReturn;
 
   if (!hasActions) {
     return (
@@ -61,7 +68,7 @@ export function ReservationActions({
     );
   }
 
-  async function submitAction(action: string) {
+  async function submitAction(action: string, extraRemarks?: string) {
     if (needsSignature && !signatureName.trim()) {
       setError("Please enter your name as typed signature.");
       return;
@@ -70,6 +77,11 @@ export function ReservationActions({
       setError("Please provide a reason for declining.");
       return;
     }
+    if (action === "equipment_return" && !extraRemarks?.trim()) {
+      setError("Please provide return remarks.");
+      return;
+    }
+
     setLoading(true);
     setError("");
 
@@ -77,7 +89,11 @@ export function ReservationActions({
       const res = await fetch(`/api/reservations/${reservationId}/approve`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({ action, remarks, signatureName }),
+        body: JSON.stringify({
+          action,
+          remarks: extraRemarks || remarks,
+          signatureName,
+        }),
       });
 
       const data = await res.json();
@@ -89,7 +105,7 @@ export function ReservationActions({
       }
 
       router.refresh();
-    } catch (err) {
+    } catch {
       setError("Network error. Please try again.");
       setLoading(false);
     }
@@ -120,7 +136,10 @@ export function ReservationActions({
           </div>
           <div className="space-y-1">
             <Label htmlFor="remarks">
-              Remarks {(showFacultyDecline || showMagsDecline) && <span className="text-red-500">* required if declining</span>}
+              Remarks{" "}
+              {(showFacultyDecline || showMagsDecline) && (
+                <span className="text-red-500">* required if declining</span>
+              )}
             </Label>
             <Textarea
               id="remarks"
@@ -133,30 +152,105 @@ export function ReservationActions({
         </div>
       )}
 
+      {/* Equipment Return Form */}
+      {showReturnForm && (
+        <div className="space-y-3 rounded-lg border p-4 bg-amber-50">
+          <p className="text-sm font-medium text-amber-800">Confirm Equipment Return</p>
+          <div className="space-y-1">
+            <Label htmlFor="returnRemarks">
+              Return remarks <span className="text-red-500">*</span>
+            </Label>
+            <Textarea
+              id="returnRemarks"
+              value={returnRemarks}
+              onChange={(e) => setReturnRemarks(e.target.value)}
+              rows={2}
+              placeholder="e.g. All equipment returned in good condition..."
+            />
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => submitAction("equipment_return", returnRemarks)}
+              disabled={loading}
+              className="bg-amber-600 text-white hover:bg-amber-700"
+            >
+              {loading ? "Processing..." : "Confirm Return"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowReturnForm(false)}
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+          </div>
+        </div>
+      )}
+
       <div className="flex flex-wrap gap-2">
         {showSemiApprove && (
-          <Button onClick={() => submitAction("semi_approve")} disabled={loading} className="bg-ub-maroon text-white">
+          <Button
+            onClick={() => submitAction("semi_approve")}
+            disabled={loading}
+            className="bg-ub-maroon text-white"
+          >
             {loading ? "Processing..." : "Semi-Approve"}
           </Button>
         )}
         {showFacultyDecline && (
-          <Button onClick={() => submitAction("decline")} disabled={loading} variant="outline" className="border-red-300 text-red-600">
+          <Button
+            onClick={() => submitAction("decline")}
+            disabled={loading}
+            variant="outline"
+            className="border-red-300 text-red-600"
+          >
             {loading ? "Processing..." : "Decline"}
           </Button>
         )}
         {showMagsApprove && (
-          <Button onClick={() => submitAction("approve")} disabled={loading} className="bg-green-600 text-white hover:bg-green-700">
+          <Button
+            onClick={() => submitAction("approve")}
+            disabled={loading}
+            className="bg-green-600 text-white hover:bg-green-700"
+          >
             {loading ? "Processing..." : "Approve"}
           </Button>
         )}
         {showMagsDecline && (
-          <Button onClick={() => submitAction("decline")} disabled={loading} variant="outline" className="border-red-300 text-red-600">
+          <Button
+            onClick={() => submitAction("decline")}
+            disabled={loading}
+            variant="outline"
+            className="border-red-300 text-red-600"
+          >
             {loading ? "Processing..." : "Decline"}
           </Button>
         )}
         {showCancel && (
-          <Button onClick={() => submitAction("cancel")} disabled={loading} variant="outline">
+          <Button
+            onClick={() => submitAction("cancel")}
+            disabled={loading}
+            variant="outline"
+          >
             {loading ? "Processing..." : "Cancel Reservation"}
+          </Button>
+        )}
+        {showMarkCompleted && !showReturnForm && (
+          <Button
+            onClick={() => submitAction("complete")}
+            disabled={loading}
+            className="bg-blue-600 text-white hover:bg-blue-700"
+          >
+            {loading ? "Processing..." : "Mark as Completed"}
+          </Button>
+        )}
+        {showEquipmentReturn && !showReturnForm && (
+          <Button
+            onClick={() => setShowReturnForm(true)}
+            disabled={loading}
+            className="bg-amber-600 text-white hover:bg-amber-700"
+          >
+            Equipment Returned
           </Button>
         )}
       </div>
