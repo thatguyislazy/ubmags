@@ -18,7 +18,8 @@ export function canManageResources(role: UserRole) {
 }
 
 export function canApproveDept(role: UserRole) {
-  return role === "DEPT_HEAD" || role === "ADMIN";
+  // Faculty and Staff can also approve department-level reservations
+  return role === "DEPT_HEAD" || role === "ADMIN" || role === "FACULTY" || role === "STAFF";
 }
 
 export function canApproveMags(role: UserRole) {
@@ -26,11 +27,13 @@ export function canApproveMags(role: UserRole) {
 }
 
 export function canViewAllReservations(role: UserRole) {
-  return ["ADMIN", "MAGS_OFFICER", "DEPT_HEAD", "STAFF"].includes(role);
+  // Faculty can view all reservations in their department
+  return ["ADMIN", "MAGS_OFFICER", "DEPT_HEAD", "FACULTY", "STAFF"].includes(role);
 }
 
 export function canAccessAdmin(role: UserRole) {
-  return role === "ADMIN" || role === "MAGS_OFFICER";
+  // Faculty and Dept Head can access admin approvals area
+  return role === "ADMIN" || role === "MAGS_OFFICER" || role === "DEPT_HEAD" || role === "FACULTY";
 }
 
 export function canCreateReservation(role: UserRole) {
