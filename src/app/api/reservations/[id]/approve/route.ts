@@ -20,7 +20,7 @@ export async function POST(
     const { action, remarks, signatureName } = body;
 
     // Validate required fields based on action
-    if (action && action !== "cancel" && !remarks) {
+    if (action && action !== "cancel" && action !== "complete" && action !== "equipment_return" && !remarks) {
       return NextResponse.json({ error: "Remarks are required" }, { status: 400 });
     }
 
@@ -42,13 +42,6 @@ export async function POST(
     if (!reservation) {
       return NextResponse.json({ error: "Not found" }, { status: 404 });
     }
-
-    // DEBUG: Log equipment data
-    console.log("========== APPROVE DEBUG ==========");
-    console.log("Reservation ID:", id);
-    console.log("Equipment count:", reservation.equipment.length);
-    console.log("Equipment data:", JSON.stringify(reservation.equipment, null, 2));
-    console.log("==================================");
 
     const role = session.role;
 
@@ -167,15 +160,9 @@ export async function POST(
         );
       }
 
-      // Check if there are any equipment items
-      if (reservation.equipment.length === 0) {
-        console.log("[WARNING] No equipment found in this reservation!");
-      }
-
       // Check if there's enough available quantity for all equipment
       for (const item of reservation.equipment) {
         const availableQty = item.resource.availableQuantity ?? 0;
-        console.log(`[DEBUG] Checking ${item.resource.name}: requested ${item.quantity}, available ${availableQty}`);
         
         if (item.quantity > availableQty) {
           return NextResponse.json(
@@ -207,14 +194,6 @@ export async function POST(
         
         // Deduct equipment quantities from available stock
         for (const item of reservation.equipment) {
-          console.log(`[DEBUG] Deducting ${item.quantity} from ${item.resource.name}`);
-          
-          const beforeUpdate = await tx.resource.findUnique({
-            where: { id: item.resourceId },
-            select: { availableQuantity: true }
-          });
-          console.log(`[DEBUG] Before deduction: ${beforeUpdate?.availableQuantity}`);
-          
           await tx.resource.update({
             where: { id: item.resourceId },
             data: {
@@ -223,12 +202,6 @@ export async function POST(
               },
             },
           });
-          
-          const afterUpdate = await tx.resource.findUnique({
-            where: { id: item.resourceId },
-            select: { availableQuantity: true }
-          });
-          console.log(`[DEBUG] After deduction: ${afterUpdate?.availableQuantity}`);
         }
         
         await tx.reservation.update({
@@ -253,6 +226,111 @@ export async function POST(
       });
       
       return NextResponse.json({ success: true, status: "APPROVED" });
+    }
+
+    // ── COMPLETE (for Venue - no equipment return needed) ─────────────────────
+    if (action === "complete") {
+      if (role !== "MAGS_OFFICER" && role !== "ADMIN") {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      if (reservation.status !== "APPROVED") {
+        return NextResponse.json(
+          { error: "Reservation is not approved" },
+          { status: 400 }
+        );
+      }
+
+      // Check if reservation period has ended
+      if (new Date(reservation.endDateTime) > new Date()) {
+        return NextResponse.json(
+          { error: "Reservation period has not ended yet" },
+          { status: 400 }
+        );
+      }
+
+      await prisma.reservation.update({
+        where: { id },
+        data: { status: ReservationStatus.COMPLETED },
+      });
+
+      await createNotification({
+        userId: reservation.userId,
+        type: "RESERVATION_UPDATE",
+        title: "Reservation Completed",
+        message: `Your reservation ${reservation.requestNumber} has been marked as completed.`,
+        link: `/reservations/${id}`,
+      });
+
+      await logAudit({
+        userId: session.id,
+        action: "COMPLETE_RESERVATION",
+        entityType: "reservation",
+        entityId: id,
+      });
+
+      return NextResponse.json({ success: true, status: "COMPLETED" });
+    }
+
+    // ── EQUIPMENT RETURN (with damage remarks) ────────────────────────────────
+    if (action === "equipment_return") {
+      if (role !== "MAGS_OFFICER" && role !== "ADMIN") {
+        return NextResponse.json({ error: "Forbidden" }, { status: 403 });
+      }
+      if (reservation.status !== "APPROVED") {
+        return NextResponse.json(
+          { error: "Reservation is not approved" },
+          { status: 400 }
+        );
+      }
+
+      // Check if reservation has equipment
+      if (reservation.equipment.length === 0) {
+        return NextResponse.json(
+          { error: "No equipment to return for this reservation" },
+          { status: 400 }
+        );
+      }
+
+      await prisma.$transaction(async (tx) => {
+        // Return quantities back to available stock
+        for (const item of reservation.equipment) {
+          await tx.resource.update({
+            where: { id: item.resourceId },
+            data: {
+              availableQuantity: {
+                increment: item.quantity,
+              },
+            },
+          });
+        }
+
+        // Update reservation status to COMPLETED and store return remarks
+        await tx.reservation.update({
+          where: { id },
+          data: {
+            status: ReservationStatus.COMPLETED,
+            rejectionReason: remarks, // Store return remarks/damage report
+          },
+        });
+      });
+
+      await createNotification({
+        userId: reservation.userId,
+        type: "RESERVATION_UPDATE",
+        title: "Equipment Returned",
+        message: `Your equipment for reservation ${reservation.requestNumber} has been returned. Remarks: ${remarks || "No issues reported."}`,
+        link: `/reservations/${id}`,
+      });
+
+      await logAudit({
+        userId: session.id,
+        action: "EQUIPMENT_RETURN",
+        entityType: "reservation",
+        entityId: id,
+        metadata: { returnRemarks: remarks },
+      });
+
+      return NextResponse.json({ success: true, status: "COMPLETED" });
     }
 
     // ── DECLINE (Department OR MAGS) ─────────────────────────────────────────

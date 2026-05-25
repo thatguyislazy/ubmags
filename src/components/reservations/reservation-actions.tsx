@@ -1,6 +1,6 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -14,6 +14,7 @@ type Props = {
   sessionId: string;
   sessionRole: string;
   hasEquipment?: boolean;
+  endDateTime?: string;
 };
 
 export function ReservationActions({
@@ -23,6 +24,7 @@ export function ReservationActions({
   sessionId,
   sessionRole,
   hasEquipment = false,
+  endDateTime,
 }: Props) {
   const router = useRouter();
   const [loading, setLoading] = useState(false);
@@ -31,6 +33,16 @@ export function ReservationActions({
   const [signatureName, setSignatureName] = useState("");
   const [returnRemarks, setReturnRemarks] = useState("");
   const [showReturnForm, setShowReturnForm] = useState(false);
+  const [isExpired, setIsExpired] = useState(false);
+
+  // Check if reservation period has ended
+  useEffect(() => {
+    if (endDateTime && status === "APPROVED") {
+      const endDate = new Date(endDateTime);
+      const now = new Date();
+      setIsExpired(endDate < now);
+    }
+  }, [endDateTime, status]);
 
   // Role checks
   const isFaculty = sessionRole === "FACULTY" || sessionRole === "DEPT_HEAD" || sessionRole === "STAFF";
@@ -44,11 +56,11 @@ export function ReservationActions({
   const showMagsDecline = isMags && status === "PENDING_MAGS";
   const showCancel = isOwner && ["PENDING_DEPT", "PENDING_MAGS"].includes(status);
 
-  // Mark as Completed — MAGS or Admin can mark APPROVED reservations as completed
-  const showMarkCompleted = isMags && status === "APPROVED";
+  // Venue: Auto mark as completed when expired
+  const showMarkCompleted = isMags && status === "APPROVED" && !hasEquipment && isExpired;
 
-  // Equipment Return — MAGS or Admin can confirm equipment return
-  const showEquipmentReturn = isMags && status === "APPROVED" && hasEquipment;
+  // Equipment: Manual return with remarks
+  const showEquipmentReturn = isMags && status === "APPROVED" && hasEquipment && !isExpired;
 
   const needsSignature = showSemiApprove || showFacultyDecline || showMagsApprove || showMagsDecline;
   const hasActions =
@@ -78,7 +90,7 @@ export function ReservationActions({
       return;
     }
     if (action === "equipment_return" && !extraRemarks?.trim()) {
-      setError("Please provide return remarks.");
+      setError("Please provide return remarks (e.g., condition of equipment).");
       return;
     }
 
@@ -104,6 +116,8 @@ export function ReservationActions({
         return;
       }
 
+      setShowReturnForm(false);
+      setReturnRemarks("");
       router.refresh();
     } catch {
       setError("Network error. Please try again.");
@@ -118,6 +132,52 @@ export function ReservationActions({
       {error && (
         <div className="rounded-lg bg-red-50 p-3 text-sm text-red-700">
           {error}
+        </div>
+      )}
+
+      {/* For Venue that has expired - show auto-complete info */}
+      {showMarkCompleted && (
+        <div className="rounded-lg bg-blue-50 p-3 text-sm text-blue-700">
+          <p className="font-medium">Reservation period has ended.</p>
+          <p className="text-xs mt-1">Click "Mark as Completed" to close this reservation.</p>
+        </div>
+      )}
+
+      {/* Equipment Return Form */}
+      {showReturnForm && (
+        <div className="space-y-3 rounded-lg border p-4 bg-amber-50">
+          <p className="text-sm font-medium text-amber-800">Confirm Equipment Return</p>
+          <div className="space-y-1">
+            <Label htmlFor="returnRemarks">
+              Return Remarks <span className="text-red-500">*</span>
+            </Label>
+            <Textarea
+              id="returnRemarks"
+              value={returnRemarks}
+              onChange={(e) => setReturnRemarks(e.target.value)}
+              rows={3}
+              placeholder="e.g., All equipment returned in good condition / Laptop has minor scratches..."
+            />
+            <p className="text-xs text-gray-500">
+              Include any damages or missing items here
+            </p>
+          </div>
+          <div className="flex gap-2">
+            <Button
+              onClick={() => submitAction("equipment_return", returnRemarks)}
+              disabled={loading}
+              className="bg-amber-600 text-white hover:bg-amber-700"
+            >
+              {loading ? "Processing..." : "Confirm Return"}
+            </Button>
+            <Button
+              variant="outline"
+              onClick={() => setShowReturnForm(false)}
+              disabled={loading}
+            >
+              Cancel
+            </Button>
+          </div>
         </div>
       )}
 
@@ -148,41 +208,6 @@ export function ReservationActions({
               rows={2}
               placeholder="Add remarks or reason..."
             />
-          </div>
-        </div>
-      )}
-
-      {/* Equipment Return Form */}
-      {showReturnForm && (
-        <div className="space-y-3 rounded-lg border p-4 bg-amber-50">
-          <p className="text-sm font-medium text-amber-800">Confirm Equipment Return</p>
-          <div className="space-y-1">
-            <Label htmlFor="returnRemarks">
-              Return remarks <span className="text-red-500">*</span>
-            </Label>
-            <Textarea
-              id="returnRemarks"
-              value={returnRemarks}
-              onChange={(e) => setReturnRemarks(e.target.value)}
-              rows={2}
-              placeholder="e.g. All equipment returned in good condition..."
-            />
-          </div>
-          <div className="flex gap-2">
-            <Button
-              onClick={() => submitAction("equipment_return", returnRemarks)}
-              disabled={loading}
-              className="bg-amber-600 text-white hover:bg-amber-700"
-            >
-              {loading ? "Processing..." : "Confirm Return"}
-            </Button>
-            <Button
-              variant="outline"
-              onClick={() => setShowReturnForm(false)}
-              disabled={loading}
-            >
-              Cancel
-            </Button>
           </div>
         </div>
       )}
@@ -235,7 +260,7 @@ export function ReservationActions({
             {loading ? "Processing..." : "Cancel Reservation"}
           </Button>
         )}
-        {showMarkCompleted && !showReturnForm && (
+        {showMarkCompleted && (
           <Button
             onClick={() => submitAction("complete")}
             disabled={loading}
@@ -250,7 +275,7 @@ export function ReservationActions({
             disabled={loading}
             className="bg-amber-600 text-white hover:bg-amber-700"
           >
-            Equipment Returned
+            Return Equipment
           </Button>
         )}
       </div>

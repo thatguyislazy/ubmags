@@ -8,7 +8,6 @@ import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import { formatDateTime } from "@/lib/utils";
 import { ReservationActions } from "@/components/reservations/reservation-actions";
-import { ReturnButton } from "@/components/reservations/return-button";
 
 export default async function ReservationDetailPage({
   params,
@@ -41,12 +40,9 @@ export default async function ReservationDetailPage({
   });
 
   const copies = ["MAGS copy", "BMD's copy", "Security's copy"] as const;
-  
-  // Check if return button should be shown
-  const isMagsOrAdmin = session.role === "MAGS_OFFICER" || session.role === "ADMIN";
-  const isApproved = reservation.status === "APPROVED";
-  const isExpired = new Date(reservation.endDateTime) < new Date();
-  const showReturnButton = isMagsOrAdmin && isApproved && isExpired;
+
+  // Check if reservation has equipment
+  const hasEquipment = reservation.equipment.length > 0;
 
   return (
     <>
@@ -124,24 +120,18 @@ export default async function ReservationDetailPage({
               </ul>
             </div>
 
-            {/* Approval Action Buttons */}
+            {/* Approval Action Buttons - with hasEquipment and endDateTime */}
             <ReservationActions
               reservationId={reservation.id}
               status={reservation.status}
               userId={reservation.user.id}
               sessionId={session.id}
               sessionRole={session.role}
+              hasEquipment={hasEquipment}
+              endDateTime={reservation.endDateTime}
             />
 
-            {/* Return Button - only for MAGS/Admin when approved and expired */}
-            {showReturnButton && (
-              <div className="border-t pt-4">
-                <div className="flex justify-end">
-                  <ReturnButton reservationId={reservation.id} />
-                </div>
-              </div>
-            )}
-
+            {/* Download PDF copies - only for approved reservations */}
             {reservation.status === "APPROVED" && (
               <div className="flex flex-wrap gap-2 pt-2 border-t">
                 <p className="w-full text-xs text-gray-500 mb-1">Download PDF copies:</p>
