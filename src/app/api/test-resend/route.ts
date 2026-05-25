@@ -1,27 +1,25 @@
 import { NextResponse } from "next/server";
-import { sendTransactionalEmail, isEmailConfigured } from "@/lib/email";
+import { Resend } from 'resend';
 
 export async function GET() {
-  // Check if email is configured
-  const configured = isEmailConfigured();
+  const resend = new Resend(process.env.RESEND_API_KEY);
   
-  console.log("Email configured:", configured);
-  console.log("SMTP_HOST:", process.env.SMTP_HOST);
-  console.log("SMTP_USER:", process.env.SMTP_USER);
-  console.log("SMTP_PORT:", process.env.SMTP_PORT);
-  
-  // Test send
-  const result = await sendTransactionalEmail({
-    to: "marcadriancuano@gmail.com",
-    subject: "Test Email from MAGS System",
-    html: "<h1>Test</h1><p>This is a test email.</p>",
-    text: "Test email from MAGS System",
-  });
-  
-  return NextResponse.json({
-    configured,
-    smtp_host: process.env.SMTP_HOST,
-    smtp_user: process.env.SMTP_USER,
-    result,
-  });
+  try {
+    const { data, error } = await resend.emails.send({
+      from: 'MAGS Test <onboarding@resend.dev>',
+      to: ['marcadriancuano@gmail.com'],
+      subject: 'Test from MAGS API',
+      html: '<h1>Hello!</h1><p>This is a test from your MAGS app.</p>',
+    });
+
+    if (error) {
+      console.error('Resend error:', error);
+      return NextResponse.json({ error }, { status: 500 });
+    }
+
+    return NextResponse.json({ success: true, data });
+  } catch (error) {
+    console.error('Error:', error);
+    return NextResponse.json({ error: String(error) }, { status: 500 });
+  }
 }
