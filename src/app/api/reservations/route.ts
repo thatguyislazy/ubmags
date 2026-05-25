@@ -8,6 +8,7 @@ import { generateRequestNumber } from "@/lib/utils";
 import { createNotification } from "@/lib/notifications";
 import { logAudit } from "@/lib/audit";
 import { ApprovalLevel, ApprovalStatus } from "@prisma/client";
+import { sendReservationStatusEmail } from "@/lib/email";
 
 export async function GET(request: Request) {
   const session = await getSession();
@@ -158,6 +159,7 @@ export async function POST(request: Request) {
         include: {
           venues: { include: { resource: true } },
           department: true,
+          user: { select: { name: true, email: true } },
         },
       });
 
@@ -230,6 +232,43 @@ export async function POST(request: Request) {
           link: `/admin/approvals`,
         });
       }
+    }
+
+    // ============ EMAIL NOTIFICATION ============
+    // Send email to the requester based on their role
+    console.log(`[MAGS Email] Preparing to send email to: ${session.email}`);
+    console.log(`[MAGS Email] User role: ${session.role}`);
+    console.log(`[MAGS Email] Initial status: ${initialStatus}`);
+    
+    try {
+      if (isStudent) {
+        // Student: send PENDING_DEPT email
+        await sendReservationStatusEmail(
+          session.email,
+          session.name,
+          "PENDING_DEPT",
+          reservation
+        );
+      } else if (isDeptHead || isFacultyOrStaff) {
+        // Faculty/Staff/Dept Head: send PENDING_MAGS email
+        await sendReservationStatusEmail(
+          session.email,
+          session.name,
+          "PENDING_MAGS",
+          reservation
+        );
+      } else if (isMagsOrAdmin) {
+        // MAGS/Admin: send APPROVED email
+        await sendReservationStatusEmail(
+          session.email,
+          session.name,
+          "APPROVED",
+          reservation
+        );
+      }
+      console.log(`[MAGS Email] Email sent successfully to ${session.email}`);
+    } catch (emailError) {
+      console.error(`[MAGS Email] Failed to send email:`, emailError);
     }
 
     await logAudit({
