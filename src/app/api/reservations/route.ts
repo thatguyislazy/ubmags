@@ -114,8 +114,6 @@ export async function POST(request: Request) {
     // Role classification
     const isMagsOrAdmin = role === "MAGS_OFFICER" || role === "ADMIN";
     const isStudent = role === "STUDENT";
-    // Faculty/Staff go through dept approval first
-    // DEPT_HEAD goes directly to PENDING_MAGS (skips dept approval)
     const isDeptHead = role === "DEPT_HEAD";
     const isFacultyOrStaff = role === "FACULTY" || role === "STAFF";
 
@@ -123,10 +121,10 @@ export async function POST(request: Request) {
     const initialStatus = isMagsOrAdmin
       ? "APPROVED"
       : isDeptHead
-      ? "PENDING_MAGS"   // Dept head skips dept approval, goes straight to MAGS
+      ? "PENDING_MAGS"
       : isFacultyOrStaff
-      ? "PENDING_MAGS"   // Faculty/Staff also go straight to MAGS (auto dept approval)
-      : "PENDING_DEPT";  // Student needs dept approval first
+      ? "PENDING_MAGS"
+      : "PENDING_DEPT";
 
     const reservation = await prisma.$transaction(async (tx) => {
       const res = await tx.reservation.create({
@@ -164,7 +162,6 @@ export async function POST(request: Request) {
       });
 
       if (isStudent) {
-        // Student: needs Dept Head approval first
         await tx.approvalLog.create({
           data: {
             entityType: "reservation",
@@ -175,7 +172,6 @@ export async function POST(request: Request) {
           },
         });
       } else if (isDeptHead || isFacultyOrStaff) {
-        // Dept Head / Faculty / Staff: auto-approve dept level, pending MAGS
         await tx.approvalLog.create({
           data: {
             entityType: "reservation",
@@ -198,23 +194,27 @@ export async function POST(request: Request) {
           },
         });
       }
-      // MAGS/ADMIN: no approval logs needed
 
       return res;
     });
 
-    // Notifications
+    // ============ NOTIFICATIONS - UPDATED TO INCLUDE FACULTY ============
     if (isStudent) {
-      const deptHeads = await prisma.user.findMany({
-        where: { role: "DEPT_HEAD", isActive: true },
+      // Notify both DEPT_HEAD and FACULTY in the same department
+      const approvers = await prisma.user.findMany({
+        where: { 
+          role: { in: ["DEPT_HEAD", "FACULTY"] }, 
+          isActive: true,
+          departmentId: departmentId,
+        },
         select: { id: true },
       });
-      for (const head of deptHeads) {
+      for (const approver of approvers) {
         await createNotification({
-          userId: head.id,
+          userId: approver.id,
           type: "RESERVATION_UPDATE",
           title: "New reservation request for approval",
-          message: `${session.name} submitted ${requestNumber} for "${data.eventTitle}". Needs dept approval.`,
+          message: `${session.name} submitted ${requestNumber} for "${data.eventTitle}". Needs your approval.`,
           link: `/admin/approvals`,
         });
       }
@@ -235,14 +235,12 @@ export async function POST(request: Request) {
     }
 
     // ============ EMAIL NOTIFICATION ============
-    // Send email to the requester based on their role
     console.log(`[MAGS Email] Preparing to send email to: ${session.email}`);
     console.log(`[MAGS Email] User role: ${session.role}`);
     console.log(`[MAGS Email] Initial status: ${initialStatus}`);
     
     try {
       if (isStudent) {
-        // Student: send PENDING_DEPT email
         await sendReservationStatusEmail(
           session.email,
           session.name,
@@ -250,7 +248,6 @@ export async function POST(request: Request) {
           reservation
         );
       } else if (isDeptHead || isFacultyOrStaff) {
-        // Faculty/Staff/Dept Head: send PENDING_MAGS email
         await sendReservationStatusEmail(
           session.email,
           session.name,
@@ -258,7 +255,6 @@ export async function POST(request: Request) {
           reservation
         );
       } else if (isMagsOrAdmin) {
-        // MAGS/Admin: send APPROVED email
         await sendReservationStatusEmail(
           session.email,
           session.name,
