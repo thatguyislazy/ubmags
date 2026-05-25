@@ -4,6 +4,7 @@ import { getSession } from "@/lib/auth";
 import { ApprovalLevel, ApprovalStatus, ReservationStatus } from "@prisma/client";
 import { createNotification } from "@/lib/notifications";
 import { logAudit } from "@/lib/audit";
+import { sendReservationStatusEmail } from "@/lib/email";
 
 export async function POST(
   request: Request,
@@ -50,7 +51,10 @@ export async function POST(
       if (reservation.userId !== session.id) {
         return NextResponse.json({ error: "Forbidden" }, { status: 403 });
       }
-      if (!["PENDING_DEPT", "PENDING_MAGS"].includes(reservation.status)) {
+      
+      // Allow cancellation for PENDING_DEPT, PENDING_MAGS, and SEMI_APPROVED
+      const cancellableStatuses = ["PENDING_DEPT", "PENDING_MAGS", "SEMI_APPROVED"];
+      if (!cancellableStatuses.includes(reservation.status)) {
         return NextResponse.json({ error: "Cannot cancel at this stage" }, { status: 400 });
       }
       
@@ -58,6 +62,14 @@ export async function POST(
         where: { id },
         data: { status: ReservationStatus.CANCELLED },
       });
+      
+      // Send email notification for cancellation
+      await sendReservationStatusEmail(
+        reservation.user.email,
+        reservation.user.name,
+        "CANCELLED",
+        reservation
+      );
       
       await logAudit({
         userId: session.id,
@@ -138,6 +150,14 @@ export async function POST(
         link: `/reservations/${id}`,
       });
 
+      // Send email notification for semi-approval
+      await sendReservationStatusEmail(
+        reservation.user.email,
+        reservation.user.name,
+        "SEMI_APPROVED",
+        reservation
+      );
+
       await logAudit({
         userId: session.id,
         action: "DEPARTMENT_APPROVE_RESERVATION",
@@ -217,6 +237,14 @@ export async function POST(
         message: `Your reservation ${reservation.requestNumber} has been approved by MAGS.`,
         link: `/reservations/${id}`,
       });
+
+      // Send email notification for final approval
+      await sendReservationStatusEmail(
+        reservation.user.email,
+        reservation.user.name,
+        "APPROVED",
+        reservation
+      );
 
       await logAudit({
         userId: session.id,
@@ -386,6 +414,14 @@ export async function POST(
         message: `Your reservation ${reservation.requestNumber} was declined. Reason: ${remarks || "No reason provided."}`,
         link: `/reservations/${id}`,
       });
+
+      // Send email notification for decline
+      await sendReservationStatusEmail(
+        reservation.user.email,
+        reservation.user.name,
+        "DECLINED",
+        reservation
+      );
 
       await logAudit({
         userId: session.id,
